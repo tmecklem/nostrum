@@ -3,27 +3,35 @@ defmodule Nostrum.Application do
 
   use Application
 
+  require Logger
+
   @doc false
   def start(_, _) do
     import Supervisor.Spec
 
-    if !Application.get_env(:nostrum, :token), do: raise("Please supply a token")
+    case Application.get_env(:nostrum, :enabled, true) do
+      false ->
+        Logger.info("Skipping nostrum real supervisor start")
+        Supervisor.start_link([], strategy: :one_for_one)
+      _ ->
+        if !Application.get_env(:nostrum, :token), do: raise("Please supply a token")
 
-    num_shards = Application.get_env(:nostrum, :num_shards, 1)
+        num_shards = Application.get_env(:nostrum, :num_shards, 1)
 
-    setup_ets_tables()
+        setup_ets_tables()
 
-    children = [
-      Nostrum.Api.Ratelimiter,
-      Nostrum.Shard.Connector,
-      Nostrum.Cache.CacheSupervisor,
-      {Nostrum.Shard.Supervisor, num_shards}
-    ]
+        children = [
+          Nostrum.Api.Ratelimiter,
+          Nostrum.Shard.Connector,
+          Nostrum.Cache.CacheSupervisor,
+          {Nostrum.Shard.Supervisor, num_shards}
+        ]
 
-    if Application.get_env(:nostrum, :dev, nil) do
-      Supervisor.start_link(children ++ [supervisor(Dummy, [])], strategy: :one_for_one)
-    else
-      Supervisor.start_link(children, strategy: :one_for_one)
+        if Application.get_env(:nostrum, :dev, nil) do
+          Supervisor.start_link(children ++ [supervisor(Dummy, [])], strategy: :one_for_one)
+        else
+          Supervisor.start_link(children, strategy: :one_for_one)
+        end
     end
   end
 
